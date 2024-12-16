@@ -132,6 +132,42 @@
 
         }
         ?>
+
+        <!-- History Section -->
+        <div class="row">
+            <h5>BMI History</h5>
+            <table class="striped">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Height (cm)</th>
+                        <th>Weight (kg)</th>
+                        <th>BMI</th>
+                        <th>Category</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    // Fetch BMI history for the current user
+                    $history_stmt = $mysqli->prepare("SELECT * FROM bmi_results WHERE user_id = ? ORDER BY created_at DESC");
+                    $history_stmt->bind_param("i", $user_id);
+                    $history_stmt->execute();
+                    $history_result = $history_stmt->get_result();
+
+                    while ($row = $history_result->fetch_assoc()) {
+                        echo "<tr>";
+                        echo "<td>" . date('Y-m-d H:i', strtotime($row['created_at'])) . "</td>";
+                        echo "<td>" . $row['height'] . "</td>";
+                        echo "<td>" . $row['weight'] . "</td>";
+                        echo "<td>" . $row['bmi'] . "</td>";
+                        echo "<td>" . $row['category'] . "</td>";
+                        echo "</tr>";
+                    }
+                    $history_stmt->close();
+                    ?>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Materialize JS -->
