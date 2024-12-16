@@ -15,20 +15,26 @@ if ($mysqli->connect_error) {
     die("Database Connection Failed: " . $mysqli->connect_error);
 }
 
-// Fetch user name for the logged-in user
+// Fetch user details for the logged-in user
 $user_id = $_SESSION['user_id'];
-$stmt = $mysqli->prepare("SELECT name FROM users WHERE id = ?");
+$stmt = $mysqli->prepare("SELECT name, email FROM users WHERE id = ?");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
-$user = $result->fetch_assoc();
-$name = $user['name'];
+
+if ($user = $result->fetch_assoc()) {
+    $_SESSION['username'] = $user['name'];
+    $_SESSION['email'] = $user['email'];
+} else {
+    echo "<div class='card-panel red lighten-4'>Error: User not found.</div>";
+    exit();
+}
 $stmt->close();
 
-// Handle form submission and BMI calculation
+// Handle form submission for BMI calculation
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['height']) && isset($_POST['weight'])) {
-    $height = (float) $_POST['height'];
-    $weight = (float) $_POST['weight'];
+    $height = (float)$_POST['height'];
+    $weight = (float)$_POST['weight'];
 
     // Validate inputs
     if ($height > 0 && $weight > 0) {
@@ -40,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['height']) && isset($_P
         else $bmiCategory = 'Obesity';
 
         $stmt = $mysqli->prepare("INSERT INTO bmi_results (user_id, name, height, weight, bmi, category) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("isddds", $user_id, $name, $height, $weight, $bmi, $bmiCategory);
+        $stmt->bind_param("isddds", $user_id, $_SESSION['username'], $height, $weight, $bmi, $bmiCategory);
         $stmt->execute();
         $stmt->close();
         header("Location: " . $_SERVER['PHP_SELF']);
@@ -52,13 +58,50 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['height']) && isset($_P
 
 // Handle delete request
 if (isset($_POST['delete_id'])) {
-    $delete_id = (int) $_POST['delete_id'];
+    $delete_id = (int)$_POST['delete_id'];
     $stmt = $mysqli->prepare("DELETE FROM bmi_results WHERE id = ? AND user_id = ?");
     $stmt->bind_param("ii", $delete_id, $user_id);
     $stmt->execute();
     $stmt->close();
     header("Location: " . $_SERVER['PHP_SELF']);
     exit();
+}
+
+// Handle profile update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_profile') {
+    $username = $_POST['username'];
+    $email = $_POST['email'];
+    $new_password = $_POST['new_password'];
+
+    $update_fields = "name = ?, email = ?";
+    $params = [$username, $email];
+    $types = "ss";
+
+    if (!empty($new_password)) {
+        $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+        $update_fields .= ", password = ?";
+        $params[] = $hashed_password;
+        $types .= "s";
+    }
+
+    $query = "UPDATE users SET $update_fields WHERE id = ?";
+    $params[] = $user_id;
+    $types .= "i";
+
+    $stmt = $mysqli->prepare($query);
+    if ($stmt) {
+        $stmt->bind_param($types, ...$params);
+        if ($stmt->execute()) {
+            $_SESSION['username'] = $username;
+            $_SESSION['email'] = $email;
+            echo "<div class='card-panel green lighten-4'>Profile updated successfully!</div>";
+        } else {
+            echo "<div class='card-panel red lighten-4'>Error updating profile: " . $stmt->error . "</div>";
+        }
+        $stmt->close();
+    } else {
+        echo "<div class='card-panel red lighten-4'>Error preparing statement!</div>";
+    }
 }
 ?>
 
@@ -70,47 +113,51 @@ if (isset($_POST['delete_id'])) {
     <title>BMI Calculator</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background-color: #fafafa;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .table-header th {
-            font-size: 16px;
-            font-weight: bold;
-        }
-
-        table.striped tbody tr:nth-child(odd) {
-            background-color: #f9f9f9;
-        }
-
-        table.striped tbody tr:nth-child(even) {
-            background-color: #fff;
-        }
-
-        .btn-small {
-            background-color: #ff5252;
-        }
-
-        .btn-small:hover {
-            background-color: #e53935;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
         <h3 class="center-align">BMI Calculator</h3>
-        <div class="card z-depth-1" style="padding: 20px; border-radius: 10px;">
+        <div class="row">
+            <div class="col s12 right-align">
+                <a class="btn blue waves-effect waves-light modal-trigger" href="#profileModal">
+                    <i class="material-icons left">person</i>Profile
+                </a>
+                <a href="logout.php" class="btn red waves-effect waves-light">
+                    <i class="material-icons left">exit_to_app</i>Logout
+                </a>
+            </div>
+        </div>
+
+        <!-- Profile Modal -->
+        <div id="profileModal" class="modal">
+            <div class="modal-content">
+                <h4>Update Profile</h4>
+                <form method="POST" action="">
+                    <input type="hidden" name="action" value="update_profile">
+                    <div class="row">
+                        <div class="input-field col s12">
+                            <input id="username" type="text" name="username" value="<?php echo $_SESSION['username']; ?>" required>
+                            <label for="username">Username</label>
+                        </div>
+                        <div class="input-field col s12">
+                            <input id="email" type="email" name="email" value="<?php echo $_SESSION['email']; ?>" required>
+                            <label for="email">Email</label>
+                        </div>
+                        <div class="input-field col s12">
+                            <input id="new_password" type="password" name="new_password">
+                            <label for="new_password">New Password (leave blank to keep current)</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn waves-effect waves-green">Update</button>
+                        <a href="#!" class="modal-close waves-effect waves-red btn-flat">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- BMI Form -->
+        <div class="card z-depth-1" style="padding: 20px;">
             <form method="POST" action="">
                 <div class="row">
                     <div class="input-field col s12 m6">
@@ -122,19 +169,15 @@ if (isset($_POST['delete_id'])) {
                         <label for="weight">Weight (in kg)</label>
                     </div>
                 </div>
-                <div class="row center-align">
-                    <button class="btn waves-effect waves-light col s12" type="submit" name="action">
-                        Calculate BMI
-                        <i class="material-icons right">calculate</i>
-                    </button>
-                </div>
+                <button class="btn waves-effect waves-light col s12" type="submit">Calculate BMI</button>
             </form>
         </div>
 
+        <!-- BMI History -->
         <h5 class="center-align">BMI History</h5>
         <table class="striped centered">
             <thead>
-                <tr class="table-header">
+                <tr>
                     <th>Date</th>
                     <th>Height (cm)</th>
                     <th>Weight (kg)</th>
@@ -150,26 +193,22 @@ if (isset($_POST['delete_id'])) {
                 $stmt->execute();
                 $result = $stmt->get_result();
 
-                if ($result->num_rows > 0) {
-                    while ($row = $result->fetch_assoc()) {
-                        echo "<tr>";
-                        echo "<td>" . date('Y-m-d H:i', strtotime($row['created_at'])) . "</td>";
-                        echo "<td>{$row['height']}</td>";
-                        echo "<td>{$row['weight']}</td>";
-                        echo "<td>{$row['bmi']}</td>";
-                        echo "<td>{$row['category']}</td>";
-                        echo "<td>
-                                <form method='POST' style='margin:0;' onsubmit='return confirm(\"Are you sure you want to delete this record?\")'>
+                while ($row = $result->fetch_assoc()) {
+                    echo "<tr>
+                            <td>" . date('Y-m-d H:i', strtotime($row['created_at'])) . "</td>
+                            <td>{$row['height']}</td>
+                            <td>{$row['weight']}</td>
+                            <td>{$row['bmi']}</td>
+                            <td>{$row['category']}</td>
+                            <td>
+                                <form method='POST'>
                                     <input type='hidden' name='delete_id' value='{$row['id']}'>
-                                    <button type='submit' class='btn-small waves-effect waves-light'>
+                                    <button type='submit' class='btn-small red waves-effect waves-light'>
                                         <i class='material-icons'>delete</i>
                                     </button>
                                 </form>
-                              </td>";
-                        echo "</tr>";
-                    }
-                } else {
-                    echo "<tr><td colspan='6'>No BMI history available.</td></tr>";
+                            </td>
+                        </tr>";
                 }
                 $stmt->close();
                 ?>
@@ -178,5 +217,11 @@ if (isset($_POST['delete_id'])) {
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var modals = document.querySelectorAll('.modal');
+            M.Modal.init(modals);
+        });
+    </script>
 </body>
 </html>
