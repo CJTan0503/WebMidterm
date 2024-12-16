@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,12 +17,14 @@
             min-height: 100vh;
             margin: 0;
         }
+
         .container {
             max-width: 600px;
             margin: auto;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h3 class="center-align">BMI Calculator</h3>
@@ -48,6 +51,35 @@
 
         <!-- Display Results -->
         <?php
+
+        session_start();
+
+        // Redirect to login if user is not logged in
+        if (!isset($_SESSION['user_id'])) {
+            header("Location: login.php");
+            exit();
+        }
+        // Database connection
+        $mysqli = new mysqli("localhost", "root", "", "bmi_system");
+
+        // Check database connection
+        if ($mysqli->connect_error) {
+            die("Database Connection Failed: " . $mysqli->connect_error);
+        }
+
+        // Fetch user name for the logged-in user
+        $user_id = $_SESSION['user_id'];
+        $stmt = $mysqli->prepare("SELECT name FROM users WHERE id = ?");
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $user = $result->fetch_assoc();
+        $name = $user['name'];
+        $stmt->close();
+
+        // Debug session data
+        // echo "User ID: $user_id <br>";
+        // echo "User Name: $name <br>";
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Get user input
             $height = (float) $_POST['height'];
@@ -87,6 +119,17 @@
                     <p><strong>BMI:</strong> $bmi</p>
                     <p><strong>Category:</strong> $bmiCategory</p>
                 </div>";
+
+            // Insert BMI result into the database
+            $stmt = $mysqli->prepare("INSERT INTO bmi_results (user_id, name, height, weight, bmi, category) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("isddds", $user_id, $name, $height, $weight, $bmi, $bmiCategory);
+
+            if ($stmt->execute()) {
+                echo "<div class='card-panel green lighten-4'>BMI data saved successfully!</div>";
+            } else {
+                echo "<div class='card-panel red lighten-4'>Error saving data: " . $stmt->error . "</div>";
+            }
+
         }
         ?>
     </div>
@@ -94,4 +137,5 @@
     <!-- Materialize JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 </body>
+
 </html>
