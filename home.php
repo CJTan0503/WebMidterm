@@ -6,7 +6,6 @@
     <title>BMI Calculator</title>
     <!-- Materialize CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
-    <!-- Materialize Icons -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         body {
@@ -48,19 +47,18 @@
 
         <!-- Display Results -->
         <?php
-        if ($_SERVER["REQUEST_METHOD"] == "POST") {
-            $height = filter_input(INPUT_POST, 'height', FILTER_VALIDATE_FLOAT);
-            $weight = filter_input(INPUT_POST, 'weight', FILTER_VALIDATE_FLOAT);
+        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+            // Sanitize and validate user input
+            $height = isset($_POST['height']) ? (float) $_POST['height'] : 0;
+            $weight = isset($_POST['weight']) ? (float) $_POST['weight'] : 0;
 
-            // Validate inputs
-            if (!$height || !$weight || $height <= 0 || $weight <= 0) {
-                $error = "<div class='card-panel red lighten-4'><strong>Error:</strong> Height and weight must be greater than zero.</div>";
+            if ($height <= 0 || $weight <= 0) {
+                echo "<div class='card-panel red lighten-4'><strong>Error:</strong> Height and weight must be greater than zero.</div>";
             } else {
                 // Calculate BMI
-                $bmi = $weight / (($height / 100) * ($height / 100));
-                $bmi = round($bmi, 2);
+                $bmi = round($weight / (($height / 100) * ($height / 100)), 2);
 
-                // Determine BMI category
+                // Determine category and color
                 if ($bmi < 18.5) {
                     $bmiCategory = 'Underweight';
                     $color = 'blue lighten-4';
@@ -75,19 +73,15 @@
                     $color = 'red lighten-4';
                 }
 
-                $result = "<div class='card-panel $color'>
-                            <h5>Your BMI Results</h5>
-                            <p><strong>Height:</strong> $height cm</p>
-                            <p><strong>Weight:</strong> $weight kg</p>
-                            <p><strong>BMI:</strong> $bmi</p>
-                            <p><strong>Category:</strong> $bmiCategory</p>
-                          </div>";
+                // Display results
+                echo "<div class='card-panel $color'>
+                        <h5>Your BMI Results</h5>
+                        <p><strong>Height:</strong> $height cm</p>
+                        <p><strong>Weight:</strong> $weight kg</p>
+                        <p><strong>BMI:</strong> $bmi</p>
+                        <p><strong>Category:</strong> $bmiCategory</p>
+                    </div>";
             }
-        }
-        if (isset($error)) {
-            echo $error;
-        } elseif (isset($result)) {
-            echo $result;
         }
         ?>
     </div>
